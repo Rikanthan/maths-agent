@@ -5,16 +5,13 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.schema import StrOutputParser
-from langchain.agents import initialize_agent, Tool
 from langchain_community.document_loaders import PyPDFLoader
 
 try:
-    from pdf2image import convert_from_path
-    import pytesseract
-    from pytesseract import TesseractNotFoundError
-    OCR_AVAILABLE = True
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
 except ImportError:
-    OCR_AVAILABLE = False
+    PYMUPDF_AVAILABLE = False
 
 # =========================
 # CONFIG
@@ -24,23 +21,19 @@ api_key = os.getenv("GOOGLE_API_KEY")
 FORCE_OUTPUT_LANG = os.getenv("OUTPUT_LANGUAGE")
 
 # =========================
-# OCR fallback
+# PyMuPDF fallback
 # =========================
-def extract_text_with_ocr(pdf_path: str) -> str:
-    if not OCR_AVAILABLE:
-        return "⚠️ OCR not available (Poppler or Tesseract not installed)."
+def extract_text_with_pymupdf(pdf_path: str) -> str:
+    if not PYMUPDF_AVAILABLE:
+        return "⚠️ PyMuPDF not available. Please install it (pip install PyMuPDF)."
     try:
-        pages = convert_from_path(pdf_path)
+        doc = fitz.open(pdf_path)
         text = ""
-        for page in pages:
-            try:
-                text += pytesseract.image_to_string(page, lang="eng+tam")
-            except TesseractNotFoundError:
-                return "⚠️ Tesseract not installed. Install it for OCR support."
-            text += "\n\n"
+        for page in doc:
+            text += page.get_text("text") + "\n\n"
         return text.strip()
     except Exception as e:
-        return f"⚠️ OCR failed: {e}"
+        return f"⚠️ PDF extraction failed: {e}"
 
 # =========================
 # Language detection
@@ -71,6 +64,7 @@ def lang_code_to_name(code: str) -> str:
 # Tools
 # =========================
 def load_pdf_text_tool(pdf_path: str) -> str:
+    # First try LangChain PyPDFLoader
     try:
         loader = PyPDFLoader(pdf_path)
         docs = loader.load()
@@ -78,8 +72,9 @@ def load_pdf_text_tool(pdf_path: str) -> str:
     except Exception:
         text = ""
 
+    # If no text extracted, fallback to PyMuPDF
     if not text.strip():
-        text = extract_text_with_ocr(pdf_path)
+        text = extract_text_with_pymupdf(pdf_path)
 
     return text if text.strip() else "⚠️ No text could be extracted from this PDF."
 

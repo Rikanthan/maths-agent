@@ -6,3 +6,4 @@ langdetect
 pdf2image
 pytesseract
 streamlit
+PyMuPDF
