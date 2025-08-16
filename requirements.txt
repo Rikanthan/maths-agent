@@ -3,8 +3,8 @@ langchain
 langchain_community
 langchain_google_genai
 langdetect
-os
 pdf2image
 pytesseract
 re
 streamlit
+os
