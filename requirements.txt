@@ -6,5 +6,3 @@ langdetect
 pdf2image
 pytesseract
 streamlit
-re
-os
