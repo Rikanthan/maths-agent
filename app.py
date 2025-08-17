@@ -8,10 +8,9 @@ from langchain.schema import StrOutputParser
 from langchain.agents import initialize_agent, Tool
 from langchain_community.document_loaders import PyPDFLoader
 
-import fitz  # PyMuPDF
-from PIL import Image
-
+# OCR (optional fallback)
 try:
+    from pdf2image import convert_from_path
     import pytesseract
     from pytesseract import TesseractNotFoundError
     OCR_AVAILABLE = True
@@ -26,25 +25,21 @@ api_key = os.getenv("GOOGLE_API_KEY")
 FORCE_OUTPUT_LANG = os.getenv("OUTPUT_LANGUAGE")
 
 # =========================
-# OCR fallback using PyMuPDF + Tesseract
+# OCR fallback
 # =========================
-def extract_text_with_ocr_pymupdf(pdf_path: str) -> str:
+def extract_text_with_ocr(pdf_path: str) -> str:
     if not OCR_AVAILABLE:
-        return "⚠️ OCR not available (Tesseract not installed)."
-
+        return "⚠️ OCR not available (Poppler or Tesseract not installed)."
     try:
+        pages = convert_from_path(pdf_path)
         text = ""
-        doc = fitz.open(pdf_path)
-        for page in doc:
-            pix = page.get_pixmap()
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        for page in pages:
             try:
-                text += pytesseract.image_to_string(img, lang="eng+tam")
+                text += pytesseract.image_to_string(page, lang="eng+tam")
             except TesseractNotFoundError:
                 return "⚠️ Tesseract not installed. Install it for OCR support."
             text += "\n\n"
-        doc.close()
-        return text.strip() if text.strip() else "⚠️ OCR could not extract any text."
+        return text.strip()
     except Exception as e:
         return f"⚠️ OCR failed: {e}"
 
@@ -85,7 +80,7 @@ def load_pdf_text_tool(pdf_path: str) -> str:
         text = ""
 
     if not text.strip():
-        return extract_text_with_ocr_pymupdf(pdf_path)
+        text = extract_text_with_ocr(pdf_path)
 
     return text if text.strip() else "⚠️ No text could be extracted from this PDF."
 
