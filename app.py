@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.schema import StrOutputParser
-from langchain.agents import initialize_agent, Tool
 from langchain_community.document_loaders import PyPDFLoader
 
 # OCR (optional fallback)
@@ -21,8 +20,39 @@ except ImportError:
 # CONFIG
 # =========================
 load_dotenv()
-api_key = os.getenv("GOOGLE_API_KEY")
 FORCE_OUTPUT_LANG = os.getenv("OUTPUT_LANGUAGE")
+ENVIRONMENT = os.getenv("ENVIRONMENT")
+
+if ENVIRONMENT == "dev":
+    pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+    os.environ["TESSDATA_PREFIX"] = os.path.join(os.getcwd(), "tessdata")
+
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
+
+prompt = PromptTemplate(
+    input_variables=["question", "output_language"],
+    template="""
+You are a Maths problem solver. 
+Write ALL answers in {output_language} ONLY.
+
+Question:
+{question}
+
+Rules:
+- Provide EXACTLY 5 steps labeled Step 1 ... Step 5.
+- Translate the question.
+- Format:
+
+Qn:
+Step 1: ...
+Step 2: ...
+Step 3: ...
+Step 4: ...
+Step 5: ...
+Final Answer: ...
+"""
+)
+chain = prompt | llm | StrOutputParser()
 
 # =========================
 # OCR fallback
@@ -50,20 +80,9 @@ def detect_output_language(text: str) -> str:
     tamil_chars = len(re.findall(r'[\u0B80-\u0BFF]', text))
     latin_chars = len(re.findall(r'[A-Za-z]', text))
 
-    if tamil_chars > 50 and tamil_chars >= latin_chars * 1.2:
-        return "ta"
-    if latin_chars > 50 and latin_chars >= tamil_chars * 1.2:
-        return "en"
-
-    try:
-        from langdetect import detect
-        code = detect(text)
-        if code.startswith("ta"): return "ta"
-        if code.startswith("en"): return "en"
-    except Exception:
-        pass
-
-    return "en"
+    if FORCE_OUTPUT_LANG in {"ta", "en"}:
+        return FORCE_OUTPUT_LANG
+    return "ta" if tamil_chars > latin_chars else "en"
 
 def lang_code_to_name(code: str) -> str:
     return {"ta": "Tamil", "en": "English"}.get(code, "English")
@@ -84,56 +103,25 @@ def load_pdf_text_tool(pdf_path: str) -> str:
 
     return text if text.strip() else "⚠️ No text could be extracted from this PDF."
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
+def split_questions(text: str):
+    """Split text into questions based on Q1:, Q2:, 1), 2), etc."""
+    parts = re.split(r"(?:\n?\d+\.)", text)
+    return [q.strip() for q in parts if q.strip()]
 
-prompt = PromptTemplate(
-    input_variables=["question_paper", "output_language"],
-    template="""
-You are a Maths problem solver. 
-Write ALL answers in {output_language} ONLY.
+def solve_one_question(question: str, lang_name: str) -> str:
+    return chain.invoke({"question": question, "output_language": lang_name})
 
-Exam paper:
-{question_paper}
-
-For each question:
-- Provide EXACTLY 5 steps labeled: Step 1, Step 2, Step 3, Step 4, Step 5.
-- Do NOT translate the question, just answer in {output_language}.
-- Output strictly in this format:
-
-Q1:
-Step 1: ...
-Step 2: ...
-Step 3: ...
-Step 4: ...
-Step 5: ...
-Final Answer: ...
-
-Q2:
-Step 1: ...
-...
-Final Answer: ...
-"""
-)
-
-chain = prompt | llm | StrOutputParser()
-
-def solve_math_tool(question_paper: str) -> str:
-    if "No text could be extracted" in question_paper:
-        return "⚠️ Cannot solve because no text was extracted."
-    code = FORCE_OUTPUT_LANG if FORCE_OUTPUT_LANG in {"ta", "en"} else detect_output_language(question_paper)
-    lang_name = lang_code_to_name(code)
-    return chain.invoke({"question_paper": question_paper, "output_language": lang_name})
-
-def save_to_txt_tool(answers: str, filename="answers.txt") -> str:
+def save_to_txt_tool(answers: list, filename="answers.txt") -> str:
     with open(filename, "w", encoding="utf-8") as f:
-        f.write(answers.strip() + "\n")
+        for ans in answers:
+            f.write(ans.strip() + "\n\n")
     return filename
 
 # =========================
 # Streamlit UI
 # =========================
 st.set_page_config(page_title="Maths Exam Solver", layout="wide")
-st.title("📘 Maths Exam Solver")
+st.title("📘 Maths Exam Solver (Live Question-by-Question)")
 
 uploaded_file = st.file_uploader("Upload your Maths exam PDF", type=["pdf"])
 
@@ -150,14 +138,26 @@ if uploaded_file is not None:
     else:
         st.text_area("Extracted Text", pdf_text[:3000] + "...", height=200)
 
-        if st.button("🔍 Solve Questions"):
-            with st.spinner("Solving questions... ⏳"):
-                answers = solve_math_tool(pdf_text)
+        if st.button("🔍 Solve One by One"):
+            questions = split_questions(pdf_text)
+            if not questions:
+                st.error("❌ No questions detected.")
+            else:
+                st.success(f"✅ Detected {len(questions)} questions.")
+                code = detect_output_language(pdf_text)
+                lang_name = lang_code_to_name(code)
 
-            st.subheader("✅ Answers")
-            st.write(answers)
+                answers = []
+                container = st.container()
 
-            # Save & download
-            txt_path = save_to_txt_tool(answers)
-            with open(txt_path, "rb") as f:
-                st.download_button("📥 Download Answers (.txt)", f, file_name="answers.txt", mime="text/plain")
+                for idx, q in enumerate(questions, start=1):
+                    with st.spinner(f"Solving Q{idx}..."):
+                        ans = solve_one_question(q, lang_name)
+                        formatted = f"### Q{idx}:\n{ans}"
+                        answers.append(formatted)
+                        container.markdown(formatted)  # ✅ update UI immediately
+
+                # Save & download
+                txt_path = save_to_txt_tool(answers)
+                with open(txt_path, "rb") as f:
+                    st.download_button("📥 Download Answers (.txt)", f, file_name="answers.txt", mime="text/plain")
