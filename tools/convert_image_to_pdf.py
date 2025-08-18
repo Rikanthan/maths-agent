@@ -5,14 +5,6 @@ from langchain_community.document_loaders import PyPDFLoader
 import os
 import re
 
-# def extract_text_with_ocr(pdf_path):
-#     pages = convert_from_path(pdf_path)
-#     text = ""
-#     for i, page in enumerate(pages):
-#         text += pytesseract.image_to_string(page, lang="eng+tam")  
-#         text += "\n\n"
-#     return text
-
 load_dotenv()
 FORCE_OUTPUT_LANG = os.getenv("OUTPUT_LANGUAGE")
 
@@ -33,25 +25,38 @@ def extract_text_with_ocr(pdf_path: str) -> str:
         text = ""
         for page in pages:
             try:
-                text += pytesseract.image_to_string(page, lang="eng+tam")
+                # Enable OCR for all 3 languages
+                text += pytesseract.image_to_string(page, lang="eng+tam+sin")
             except TesseractNotFoundError:
                 return "⚠️ Tesseract not installed. Install it for OCR support."
             text += "\n\n"
         return text.strip()
     except Exception as e:
         return f"⚠️ OCR failed: {e}"
+
     
 
 def detect_output_language(text: str) -> str:
     tamil_chars = len(re.findall(r'[\u0B80-\u0BFF]', text))
-    latin_chars = len(re.findall(r'[A-Za-z]', text))
+    sinhala_chars = len(re.findall(r'[\u0D80-\u0DFF]', text))
+    english_chars = len(re.findall(r'[A-Za-z]', text))
 
-    if FORCE_OUTPUT_LANG in {"ta", "en"}:
+    if FORCE_OUTPUT_LANG in {"ta", "si", "en"}:
         return FORCE_OUTPUT_LANG
-    return "ta" if tamil_chars > latin_chars else "en"
+    
+    # Pick the language with the most characters
+    if sinhala_chars > tamil_chars and sinhala_chars > english_chars:
+        return "si"
+    elif tamil_chars > english_chars:
+        return "ta"
+    elif english_chars > 0:
+        return "en"
+    else:
+        return "en"  # fallback default
 
 def lang_code_to_name(code: str) -> str:
-    return {"ta": "Tamil", "en": "English"}.get(code, "English")
+    return {"ta": "Tamil", "si": "Sinhala", "en": "English"}.get(code, "English")
+
 
 def load_pdf_text_tool(pdf_path: str) -> str:
     try:
