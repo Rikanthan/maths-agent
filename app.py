@@ -1,11 +1,15 @@
 import os
 import re
+from langchain_groq import ChatGroq
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from prompts.custom_prompts import prompt
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
 from langchain.schema import StrOutputParser
-from tools.convert_image_to_pdf import load_pdf_text_tool, detect_output_language, lang_code_to_name
+from prompts.custom_prompts import prompt
+from tools.convert_image_to_pdf import load_pdf_text_tool, detect_output_language, lang_code_to_name, load_syllabus
 from tools.split_questions import save_to_txt_tool, split_questions
 
 # OCR (optional fallback)
@@ -24,19 +28,36 @@ load_dotenv()
 FORCE_OUTPUT_LANG = os.getenv("OUTPUT_LANGUAGE")
 ENVIRONMENT = os.getenv("ENVIRONMENT")
 
+pdf_path = "Maths.pdf"  # your PDF file
+syllabus_path = "syllabus.pdf"
+syllabus = load_syllabus(syllabus_path)
 if ENVIRONMENT == "dev":
     pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
     os.environ["TESSDATA_PREFIX"] = os.path.join(os.getcwd(), "tessdata")
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
+# Main LLM for solving
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
+llm2 = ChatGroq(model="llama-3.3-70b-versatile",verbose=True, temperature=0.2, max_tokens=50)
 chain = prompt | llm | StrOutputParser()
+
+# =========================
+# Validation LLMChain
+# =========================
+validation_template = """Determine if the following is a valid maths question. 
+Answer only 'Yes' or 'No'.
+
+Question:
+{question}
+"""
+validation_prompt = PromptTemplate(input_variables=["question"], template=validation_template)
+validation_chain = LLMChain(llm=llm, prompt=validation_prompt)
 
 # =========================
 # Solve question with streaming
 # =========================
 def solve_one_question_stream(question: str, lang_name: str) -> str:
     partial_answer = ""
-    for chunk in chain.stream({"question": question, "output_language": lang_name}):
+    for chunk in chain.stream({"question": question, "output_language": lang_name, "syllabus": syllabus }):
         if st.session_state.get("stop", False):
             print("[TRACE] Stop triggered during streaming!")
             break
@@ -44,6 +65,20 @@ def solve_one_question_stream(question: str, lang_name: str) -> str:
             partial_answer += chunk
             print(f"[TRACE] Streaming chunk: {chunk[:40]}...")
     return partial_answer.strip()
+
+# =========================
+# Validation function
+# =========================
+def is_valid_math_question(question: str) -> bool:
+    try:
+        result = validation_chain.run({"question": question})
+        result_lower = result.strip().lower()
+        print(f"[TRACE] Validation response: {result_lower}")
+        return "yes" in result_lower
+    except:
+        st.session_state["stop"] = True
+        print(f"[TRACE] Validation Stopped due to exceptions")
+        return "no"
 
 # =========================
 # Streamlit UI
@@ -112,18 +147,31 @@ if uploaded_file is not None:
         # -------------------------
         if st.button("🔍 Solve One by One"):
             st.session_state["stop"] = False  # reset stop flag
-            questions = split_questions(pdf_text)
-            print(f"[TRACE] Detected {len(questions)} questions")
+            candidate_questions = split_questions(pdf_text)
+            print(f"[TRACE] Split into {len(candidate_questions)} candidate questions")
+            if len(candidate_questions) > 15:
+                candidate_questions = candidate_questions[:15]
+            # Validate questions with LangChain
+            valid_questions = candidate_questions
+            checked_question = 1
+            # for q in candidate_questions:
+            #     print(f"[TRACE] checking question: {checked_question}")
+            #     if is_valid_math_question(q):
+            #         valid_questions.append(q)
+            #     else:
+            #         print(f"[TRACE] Invalid question skipped: {q[:60]}...")
+            #     checked_question = checked_question + 1
 
-            if not questions:
-                st.error("❌ No questions detected.")
-                print("[ERROR] No questions found in text")
+            # print(f"[TRACE] {len(valid_questions)} valid questions retained")
+
+            if not valid_questions:
+                st.error("❌ No valid maths questions detected.")
             else:
-                st.success(f"✅ Detected {len(questions)} questions.")
+                st.success(f"✅ {len(valid_questions)} valid questions detected.")
                 answers = []
                 container = st.container()
 
-                for idx, q in enumerate(questions, start=1):
+                for idx, q in enumerate(valid_questions, start=1):
                     if st.session_state["stop"]:
                         st.warning("⏹ Solving stopped by user.")
                         print(f"[TRACE] Stopped at Q{idx}")
@@ -131,8 +179,12 @@ if uploaded_file is not None:
 
                     print(f"[TRACE] Processing Q{idx}: {q[:80]}...")
                     with st.spinner(f"Solving Q{idx}..."):
-                        ans = solve_one_question_stream(q, lang_name)
-                        if not ans:
+                        try:
+                            ans = solve_one_question_stream(q, lang_name)
+                            if not ans:
+                                ans = "⚠️ Answer was interrupted or empty."
+                        except Exception:
+                            print(f"[TRACE] Stopped due to exceptions")
                             ans = "⚠️ Answer was interrupted or empty."
                         formatted = f"### Q{idx}:\n{ans}"
                         answers.append(formatted)

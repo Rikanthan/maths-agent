@@ -1,9 +1,10 @@
 from langchain.prompts import PromptTemplate
 
 prompt = PromptTemplate(
-    input_variables=["question", "output_language"],
+    input_variables=["question", "output_language","syllabus"],
     template="""
-You are a Maths problem resolver.
+You are a Maths problem resolver. 
+You can solve all problems related to {syllabus}
 Write ALL answers in {output_language} ONLY.
 
 Question:

@@ -1,3 +1,4 @@
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pdf2image import convert_from_path
 import pytesseract
 from dotenv import load_dotenv
@@ -59,14 +60,29 @@ def lang_code_to_name(code: str) -> str:
 
 
 def load_pdf_text_tool(pdf_path: str) -> str:
-    try:
-        loader = PyPDFLoader(pdf_path)
-        docs = loader.load()
-        text = "\n".join(d.page_content for d in docs)
-    except Exception:
-        text = ""
+    # try:
+    #     loader = PyPDFLoader(pdf_path)
+    #     docs = loader.load()
+    #     text = "\n".join(d.page_content for d in docs)
+    # except Exception:
+    #     text = ""
 
-    if not text.strip():
-        text = extract_text_with_ocr(pdf_path)
+    # if not text.strip():
+    text = extract_text_with_ocr(pdf_path)
 
     return text if text.strip() else "⚠️ No text could be extracted from this PDF."
+
+def load_syllabus(pdf_path) -> str:
+    try:
+        loader = PyPDFLoader(pdf_path)
+        documents = loader.load()
+
+        # 3️⃣ Split into manageable chunks (Gemini can handle longer text, but safer to split)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+        chunks = splitter.split_documents(documents)
+
+        # 4️⃣ Combine chunks into single story text
+        syllabus = "\n".join([chunk.page_content for chunk in chunks])
+    except:
+        syllabus = "no syllabus found"
+    return syllabus

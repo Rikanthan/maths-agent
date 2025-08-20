@@ -1,8 +1,11 @@
 import re
 
 def split_questions(text: str):
-    """Split text into questions based on Q1:, Q2:, 1), 2), etc."""
-    parts = re.split(r"(?:\n?\d+\.)", text)
+    """
+    Split text into questions based on patterns like:
+    Q1:, Q2:, 1., 2., 1), 2), 01), 02), etc.
+    """
+    parts = re.split(r"(?:\n?(?:Q?\d{1,2}[\.:)]))", text)
     return [q.strip() for q in parts if q.strip()]
 
 def save_to_txt_tool(answers: list, filename="answers.txt") -> str:
