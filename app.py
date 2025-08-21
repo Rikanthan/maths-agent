@@ -51,98 +51,84 @@ def solve_one_question_stream(question: str, lang_name: str) -> str:
 st.set_page_config(page_title="Maths Exam Solver", layout="wide")
 st.title("📘 Maths Exam Solver (Live Question-by-Question)")
 
-# Stop flag in session state
 if "stop" not in st.session_state:
     st.session_state["stop"] = False
 
-# -------------------------
 # Step 1: User selects language
-# -------------------------
 selected_lang = st.selectbox(
     "Select output language:",
     options=["auto", "en", "ta", "si"],
     format_func=lambda x: lang_code_to_name(x) if x != "auto" else "Auto Detect"
 )
-print(f"[TRACE] User selected language option: {selected_lang}")
 
-# -------------------------
 # Step 2: Upload PDF
-# -------------------------
 uploaded_file = st.file_uploader("Upload your Maths exam PDF", type=["pdf"])
 
 if uploaded_file is not None:
     temp_path = "temp.pdf"
     with open(temp_path, "wb") as f:
         f.write(uploaded_file.read())
-    print(f"[TRACE] File uploaded and saved to {temp_path}")
 
     st.info("📄 Extracting text...")
     pdf_text = load_pdf_text_tool(temp_path)
-    print(f"[TRACE] Extracted text length: {len(pdf_text)} chars")
 
     if "⚠️" in pdf_text:
         st.error(pdf_text)
-        print("[ERROR] PDF extraction failed")
     else:
         st.text_area("Extracted Text", pdf_text[:3000] + "...", height=200)
 
-        # -------------------------
-        # Resolve final language
-        # -------------------------
+        # Language selection
         if selected_lang == "auto":
             code = detect_output_language(pdf_text)
             st.caption(f"📌 Auto-detected language: **{lang_code_to_name(code)}**")
-            print(f"[TRACE] Auto-detected language code: {code}")
         else:
             code = selected_lang
-            print(f"[TRACE] Forced language code: {code}")
 
         lang_name = lang_code_to_name(code)
-        print(f"[TRACE] Final language name resolved: {lang_name}")
 
-        # -------------------------
-        # Stop button
-        # -------------------------
         if st.button("⏹ Stop Solving"):
             st.session_state["stop"] = True
-            print("[TRACE] Stop button clicked")
 
-        # -------------------------
-        # Solve One by One
-        # -------------------------
         if st.button("🔍 Solve One by One"):
-            st.session_state["stop"] = False  # reset stop flag
-            questions = split_questions(pdf_text)
-            print(f"[TRACE] Detected {len(questions)} questions")
+            st.session_state["stop"] = False
 
-            if not questions:
-                st.error("❌ No questions detected.")
-                print("[ERROR] No questions found in text")
+            # Split and filter
+            all_questions, valid_questions = split_questions(pdf_text)
+            total_count = len(all_questions)
+            valid_count = len(valid_questions)
+            invalid_count = total_count - valid_count
+            answered_count = 0
+
+            if not valid_questions:
+                st.error("❌ No valid math questions detected.")
             else:
-                st.success(f"✅ Detected {len(questions)} questions.")
+                st.success(f"✅ Detected {valid_count} valid math questions out of {total_count} total.")
                 answers = []
                 container = st.container()
 
-                for idx, q in enumerate(questions, start=1):
+                for idx, q in enumerate(valid_questions, start=1):
                     if st.session_state["stop"]:
                         st.warning("⏹ Solving stopped by user.")
-                        print(f"[TRACE] Stopped at Q{idx}")
                         break
 
-                    print(f"[TRACE] Processing Q{idx}: {q[:80]}...")
                     with st.spinner(f"Solving Q{idx}..."):
                         ans = solve_one_question_stream(q, lang_name)
-                        if not ans:
-                            ans = "⚠️ Answer was interrupted or empty."
-                        formatted = f"### Q{idx}:\n{ans}"
-                        answers.append(formatted)
-                        container.markdown(formatted)
-                    print(f"[TRACE] Finished Q{idx}")
+                        if ans and "not related to maths" not in ans.lower():
+                            answered_count += 1
+                            formatted = f"### Q{idx}:\n{ans}"
+                            answers.append(formatted)
+                            container.markdown(formatted)
 
-                # Save & download
+                # Summary
+                st.subheader("📊 Summary")
+                st.write(f"- Total questions detected: **{total_count}**")
+                st.write(f"- Valid math questions: **{valid_count}**")
+                st.write(f"- Invalid / ignored questions: **{invalid_count}**")
+                st.write(f"- Answered questions: **{answered_count}**")
+
+                # Save & download answers
                 if answers:
                     txt_path = save_to_txt_tool(answers)
-                    print(f"[TRACE] Saved answers to {txt_path}")
                     with open(txt_path, "rb") as f:
                         st.download_button(
                             "📥 Download Answers (.txt)",

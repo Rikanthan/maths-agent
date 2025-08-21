@@ -59,14 +59,14 @@ def lang_code_to_name(code: str) -> str:
 
 
 def load_pdf_text_tool(pdf_path: str) -> str:
-    try:
-        loader = PyPDFLoader(pdf_path)
-        docs = loader.load()
-        text = "\n".join(d.page_content for d in docs)
-    except Exception:
-        text = ""
+    # try:
+    #     loader = PyPDFLoader(pdf_path)
+    #     docs = loader.load()
+    #     text = "\n".join(d.page_content for d in docs)
+    # except Exception:
+    #     text = ""
 
-    if not text.strip():
-        text = extract_text_with_ocr(pdf_path)
+    # if not text.strip():
+    text = extract_text_with_ocr(pdf_path)
 
     return text if text.strip() else "⚠️ No text could be extracted from this PDF."
