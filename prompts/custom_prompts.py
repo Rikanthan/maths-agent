@@ -1,6 +1,6 @@
 from langchain.prompts import PromptTemplate
 
-prompt = PromptTemplate(
+maths_prompt = PromptTemplate(
     input_variables=["question", "output_language"],
     template="""
 You are a Maths problem resolver.
@@ -24,6 +24,23 @@ Step 2: ...
 Step 3: ...
 Step 4: ...
 Step 5: ...
+Final Answer: ...
+"""
+)
+
+prompt = PromptTemplate(
+    input_variables=["question", "output_language"],
+    template="""
+You are a english exam resolver.
+Write ALL answers in english ONLY.
+
+Question:
+{question}
+
+Rules:
+- read the question.
+- sometimes it might related to picture.
+- please answer to the question
 Final Answer: ...
 """
 )

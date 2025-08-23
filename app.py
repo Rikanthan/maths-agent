@@ -28,7 +28,7 @@ if ENVIRONMENT == "dev":
     pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
     os.environ["TESSDATA_PREFIX"] = os.path.join(os.getcwd(), "tessdata")
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, disable_streaming=False)
 chain = prompt | llm | StrOutputParser()
 
 # =========================
@@ -48,8 +48,8 @@ def solve_one_question_stream(question: str, lang_name: str) -> str:
 # =========================
 # Streamlit UI
 # =========================
-st.set_page_config(page_title="Maths Exam Solver", layout="wide")
-st.title("📘 Maths Exam Solver (Live Question-by-Question)")
+st.set_page_config(page_title="English Exam Solver", layout="wide")
+st.title("📘 English Exam Solver (Live Question-by-Question)")
 
 if "stop" not in st.session_state:
     st.session_state["stop"] = False
@@ -62,7 +62,7 @@ selected_lang = st.selectbox(
 )
 
 # Step 2: Upload PDF
-uploaded_file = st.file_uploader("Upload your Maths exam PDF", type=["pdf"])
+uploaded_file = st.file_uploader("Upload your English exam PDF", type=["pdf"])
 
 if uploaded_file is not None:
     temp_path = "temp.pdf"
@@ -122,7 +122,7 @@ if uploaded_file is not None:
                 # Summary
                 st.subheader("📊 Summary")
                 st.write(f"- Total questions detected: **{total_count}**")
-                st.write(f"- Valid math questions: **{valid_count}**")
+                st.write(f"- Valid questions: **{valid_count}**")
                 st.write(f"- Invalid / ignored questions: **{invalid_count}**")
                 st.write(f"- Answered questions: **{answered_count}**")
 
