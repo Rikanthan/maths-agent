@@ -100,9 +100,9 @@ if uploaded_file is not None:
             answered_count = 0
 
             if not valid_questions:
-                st.error("❌ No valid math questions detected.")
+                st.error("❌ No valid questions detected.")
             else:
-                st.success(f"✅ Detected {valid_count} valid math questions out of {total_count} total.")
+                st.success(f"✅ Detected {valid_count} valid questions out of {total_count} total.")
                 answers = []
                 container = st.container()
 
@@ -113,7 +113,7 @@ if uploaded_file is not None:
 
                     with st.spinner(f"Solving Q{idx}..."):
                         ans = solve_one_question_stream(q, lang_name)
-                        if ans and "not related to maths" not in ans.lower():
+                        if ans and "not related" not in ans.lower():
                             answered_count += 1
                             formatted = f"### Q{idx}:\n{ans}"
                             answers.append(formatted)
