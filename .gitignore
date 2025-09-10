@@ -65,6 +65,7 @@ langchain/token.json
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+questions.db
 
 # Flask stuff:
 instance/
