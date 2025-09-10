@@ -7,6 +7,7 @@ from prompts.custom_prompts import prompt
 from langchain.schema import StrOutputParser
 from tools.convert_image_to_pdf import load_pdf_text_tool, detect_output_language, lang_code_to_name
 from tools.split_questions import save_to_txt_tool, split_questions
+from tools.db_functions import init_db,compute_file_hash,save_questions_to_db,load_questions_from_db
 
 # OCR (optional fallback)
 try:
@@ -54,6 +55,9 @@ st.title("📘 English Exam Solver (Live Question-by-Question)")
 if "stop" not in st.session_state:
     st.session_state["stop"] = False
 
+# Init DB
+init_db()
+
 # Step 1: User selects language
 selected_lang = st.selectbox(
     "Select output language:",
@@ -65,74 +69,84 @@ selected_lang = st.selectbox(
 uploaded_file = st.file_uploader("Upload your English exam PDF", type=["pdf"])
 
 if uploaded_file is not None:
-    temp_path = "temp.pdf"
-    with open(temp_path, "wb") as f:
-        f.write(uploaded_file.read())
+    file_bytes = uploaded_file.read()
+    file_hash = compute_file_hash(file_bytes)
 
-    st.info("📄 Extracting text...")
-    pdf_text = load_pdf_text_tool(temp_path)
+    # Check DB first
+    existing_questions = load_questions_from_db(file_hash)
 
-    if "⚠️" in pdf_text:
-        st.error(pdf_text)
+    if existing_questions:
+        st.success("✅ Loaded questions from database (file already processed).")
+        all_questions, valid_questions = existing_questions, existing_questions
     else:
-        st.text_area("Extracted Text", pdf_text[:3000] + "...", height=200)
+        temp_path = "temp.pdf"
+        with open(temp_path, "wb") as f:
+            f.write(file_bytes)
 
-        # Language selection
-        if selected_lang == "auto":
-            code = detect_output_language(pdf_text)
-            st.caption(f"📌 Auto-detected language: **{lang_code_to_name(code)}**")
+        st.info("📄 Extracting text...")
+        pdf_text = load_pdf_text_tool(temp_path)
+
+        if "⚠️" in pdf_text:
+            st.error(pdf_text)
         else:
-            code = selected_lang
-
-        lang_name = lang_code_to_name(code)
-
-        if st.button("⏹ Stop Solving"):
-            st.session_state["stop"] = True
-
-        if st.button("🔍 Solve One by One"):
-            st.session_state["stop"] = False
-
-            # Split and filter
             all_questions, valid_questions = split_questions(pdf_text)
-            total_count = len(all_questions)
-            valid_count = len(valid_questions)
-            invalid_count = total_count - valid_count
-            answered_count = 0
+            save_questions_to_db(file_hash, uploaded_file.name, valid_questions)
+            st.success("✅ Questions extracted and stored in DB.")
 
-            if not valid_questions:
-                st.error("❌ No valid questions detected.")
-            else:
-                st.success(f"✅ Detected {valid_count} valid questions out of {total_count} total.")
-                answers = []
-                container = st.container()
+    # Language selection
+    if selected_lang == "auto":
+        code = detect_output_language(" ".join(valid_questions))
+        st.caption(f"📌 Auto-detected language: **{lang_code_to_name(code)}**")
+    else:
+        code = selected_lang
 
-                for idx, q in enumerate(valid_questions, start=1):
-                    if st.session_state["stop"]:
-                        st.warning("⏹ Solving stopped by user.")
-                        break
+    lang_name = lang_code_to_name(code)
 
-                    with st.spinner(f"Solving Q{idx}..."):
-                        ans = solve_one_question_stream(q, lang_name)
-                        if ans and "not related" not in ans.lower():
-                            answered_count += 1
-                            formatted = f"### Q{idx}:\n{ans}"
-                            answers.append(formatted)
-                            container.markdown(formatted)
+    if st.button("⏹ Stop Solving"):
+        st.session_state["stop"] = True
 
-                # Summary
-                st.subheader("📊 Summary")
-                st.write(f"- Total questions detected: **{total_count}**")
-                st.write(f"- Valid questions: **{valid_count}**")
-                st.write(f"- Invalid / ignored questions: **{invalid_count}**")
-                st.write(f"- Answered questions: **{answered_count}**")
+    if st.button("🔍 Solve One by One"):
+        st.session_state["stop"] = False
 
-                # Save & download answers
-                if answers:
-                    txt_path = save_to_txt_tool(answers)
-                    with open(txt_path, "rb") as f:
-                        st.download_button(
-                            "📥 Download Answers (.txt)",
-                            f,
-                            file_name="answers.txt",
-                            mime="text/plain",
-                        )
+        total_count = len(all_questions)
+        valid_count = len(valid_questions)
+        invalid_count = total_count - valid_count
+        answered_count = 0
+
+        if not valid_questions:
+            st.error("❌ No valid questions detected.")
+        else:
+            st.success(f"✅ Detected {valid_count} valid questions out of {total_count} total.")
+            answers = []
+            container = st.container()
+
+            for idx, q in enumerate(valid_questions, start=1):
+                if st.session_state["stop"]:
+                    st.warning("⏹ Solving stopped by user.")
+                    break
+
+                with st.spinner(f"Solving Q{idx}..."):
+                    ans = solve_one_question_stream(q, lang_name)
+                    if ans and "not related" not in ans.lower():
+                        answered_count += 1
+                        formatted = f"### Q{idx}:\n{ans}"
+                        answers.append(formatted)
+                        container.markdown(formatted)
+
+            # Summary
+            st.subheader("📊 Summary")
+            st.write(f"- Total questions detected: **{total_count}**")
+            st.write(f"- Valid questions: **{valid_count}**")
+            st.write(f"- Invalid / ignored questions: **{invalid_count}**")
+            st.write(f"- Answered questions: **{answered_count}**")
+
+            # Save & download answers
+            if answers:
+                txt_path = save_to_txt_tool(answers)
+                with open(txt_path, "rb") as f:
+                    st.download_button(
+                        "📥 Download Answers (.txt)",
+                        f,
+                        file_name="answers.txt",
+                        mime="text/plain",
+                    )
