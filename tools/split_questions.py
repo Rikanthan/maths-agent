@@ -1,7 +1,5 @@
 import re
 
-import re
-
 # def split_questions(text: str):
 #     """Split text into candidate questions and keep only math-related ones (any language)."""
 #     # Remove exam headers -> cut everything before first "1." or "1)"

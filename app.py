@@ -7,7 +7,8 @@ from prompts.custom_prompts import prompt
 from langchain.schema import StrOutputParser
 from tools.convert_image_to_pdf import load_pdf_text_tool, detect_output_language, lang_code_to_name
 from tools.split_questions import save_to_txt_tool, split_questions
-from tools.db_functions import init_db,compute_file_hash,save_questions_to_db,load_questions_from_db
+from tools.superbase_db_functions import save_questions_to_db,load_questions_from_db,compute_file_hash
+
 
 # OCR (optional fallback)
 try:
@@ -56,7 +57,7 @@ if "stop" not in st.session_state:
     st.session_state["stop"] = False
 
 # Init DB
-init_db()
+
 
 # Step 1: User selects language
 selected_lang = st.selectbox(
@@ -72,11 +73,10 @@ if uploaded_file is not None:
     file_bytes = uploaded_file.read()
     file_hash = compute_file_hash(file_bytes)
 
-    # Check DB first
     existing_questions = load_questions_from_db(file_hash)
 
     if existing_questions:
-        st.success("✅ Loaded questions from database (file already processed).")
+        st.success("✅ Loaded questions from Supabase (file already processed).")
         all_questions, valid_questions = existing_questions, existing_questions
     else:
         temp_path = "temp.pdf"
@@ -91,7 +91,8 @@ if uploaded_file is not None:
         else:
             all_questions, valid_questions = split_questions(pdf_text)
             save_questions_to_db(file_hash, uploaded_file.name, valid_questions)
-            st.success("✅ Questions extracted and stored in DB.")
+            st.success("✅ Questions extracted and stored in Supabase.")
+
 
     # Language selection
     if selected_lang == "auto":
