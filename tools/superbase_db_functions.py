@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-url = os.getenv("PROJECT_URL")
-key = os.getenv("SUPERBASE_API_KEY")
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_API_KEY")
 
 def get_supabase_client():
     return create_client(url, key)

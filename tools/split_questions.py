@@ -21,25 +21,35 @@ import re
 
 import re
 
-def split_questions(text: str):
-    """Split text by Test sections only, ignore everything before Test 1."""
+import re
 
-    # Normalize spacing (handles Test1 / Test 1)
-    text = re.sub(r"(Test\s*\d+)", r"\n\1", text, flags=re.IGNORECASE)
+def split_questions(text: str, max_q: int = 40):
+    """Extract up to max_q multiple-choice questions from text and format them."""
 
-    # Cut everything before Test 1
-    match = re.search(r"(?:Test\s*1)", text, flags=re.IGNORECASE)
-    if match:
-        text = text[match.start():]
+    # Find question blocks (e.g., 1. ... until next number)
+    pattern = r"(\d+\..*?)(?=\d+\.|$)"
+    questions = re.findall(pattern, text, flags=re.S)
 
-    # Split by Test labels only
-    parts = re.split(r"(?:Test\s*\d+)", text, flags=re.IGNORECASE)
+    formatted = []
+    for idx, q in enumerate(questions[:max_q], start=1):
+        lines = q.strip().split("\n")
+        if not lines:
+            continue
 
-    # Clean
-    sections = [p.strip() for p in parts if p.strip()]
+        # First line = question text
+        q_text = lines[0].strip()
+        # Remove original numbering
+        q_text_clean = re.sub(r"^\d+\.\s*", "", q_text)
 
-    print(f'split test sections count: {len(sections)} ')
-    return sections, sections
+        # Remaining lines = options
+        opts = [line.strip() for line in lines[1:] if line.strip()]
+        options_str = " ".join([f"({i+1}) {opt}" for i, opt in enumerate(opts[:4])])
+
+        formatted.append(f"{idx}. {q_text_clean}\n{options_str}\n")
+
+    print(f"extracted questions: {len(formatted)}")
+    return formatted, formatted
+
 
 
 def save_to_txt_tool(answers: list, filename="answers.txt") -> str:
