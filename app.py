@@ -51,7 +51,7 @@ groq_llm = ChatGroq(model_name="groq/compound-mini", api_key=groq_api_key)
 # Prompt Template (query version for .run)
 # =========================
 exam_prompt = PromptTemplate(
-    input_variables=["context", "query", "output_language"],
+    input_variables=["context", "question"],
     template="""
 You are an English exam assistant. Use the context from the syllabus to answer.
 
@@ -59,9 +59,9 @@ Context:
 {context}
 
 Question:
-{query}
+{question}
 
-Answer in {output_language}:
+Answer in tamil:
 """
 )
 
@@ -111,8 +111,7 @@ def get_relevant_answer(query, embeddings, primary_llm, fallback_llm, output_lan
     try:
         # ✅ Use .run() with key 'query'
         result = rag_chain.run({
-            "query": query,
-            "output_language": output_lang
+            "query": query
         })
     except ResourceExhausted:
         st.warning("⚠️ Quota exceeded for Gemini. Switching to Groq...")
@@ -123,8 +122,7 @@ def get_relevant_answer(query, embeddings, primary_llm, fallback_llm, output_lan
             chain_type_kwargs={"prompt": exam_prompt}
         )
         result = rag_chain.run({
-            "query": query,
-            "output_language": output_lang
+            "query": query
         })
 
     if "Sorry" not in result:
