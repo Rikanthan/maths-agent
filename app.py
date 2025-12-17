@@ -30,7 +30,7 @@ if ENVIRONMENT == "dev":
     pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
     os.environ["TESSDATA_PREFIX"] = os.path.join(os.getcwd(), "tessdata")
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, disable_streaming=False)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.2, disable_streaming=False)
 chain = prompt | llm | StrOutputParser()
 
 # =========================
