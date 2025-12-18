@@ -39,7 +39,7 @@ Question:
 
 Rules:
 - read the question.
-- sometimes it might related to picture.
+- if questions related to picture skip and move to next question.
 - please answer to the question
 Final Answer: ...
 """
