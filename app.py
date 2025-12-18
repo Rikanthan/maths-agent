@@ -51,7 +51,7 @@ def solve_one_question_stream(question: str, lang_name: str) -> str:
 # Streamlit UI
 # =========================
 st.set_page_config(page_title="English Exam Solver", layout="wide")
-st.title("📘 English Exam Solver (Live Question-by-Question)")
+st.title("📘 English Exam Solver")
 
 if "stop" not in st.session_state:
     st.session_state["stop"] = False

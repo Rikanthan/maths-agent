@@ -35,7 +35,6 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-answers.txt
 temp.pdf
 
 # Unit test / coverage reports
